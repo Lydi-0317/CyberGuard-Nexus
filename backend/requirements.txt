@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+scikit-learn==1.5.2
+pandas==2.2.3
+numpy==2.1.1
+torch==2.4.1
+transformers==4.45.2
+pymongo==4.8.0
+redis==5.0.8
+requests==2.32.3
+python-dotenv==1.0.1
