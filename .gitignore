@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv/
+venv/
+pipenv/
+
+# FastAPI/ML
+*.pkl
+models/
+checkpoints/
+data/raw/
+
+# DB/Logs
+*.log
+.DS_Store
+mongodb/
+redis/
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+.dockerignore
+
+# Builds
+dist/
+build/
+*.egg-info/
