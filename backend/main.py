@@ -1,46 +1,80 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from transformers import pipeline
 import uvicorn
+import re
+from typing import Optional, Dict, Any, List
 
-app = FastAPI(title="CyberGuard Nexus API", version="1.0.0")
+app = FastAPI(title="🛡️ CyberGuard Nexus v1.0")
 
-# CORS for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+print("🔄 Loading BERT model...")
+classifier = pipeline(
+    "text-classification",
+    model=r"C:\Users\Lydia\Projects\CyberGuard-Nexus\backend\ml-models\bert-scam-detector",
+    local_files_only=True
 )
+print("✅ BERT loaded!")
+
+# Live stats (mock)
+STATS = {
+    "blocked_today": 89,
+    "total_scans": 1254,
+    "accuracy": "F1: 0.957",
+    "emergency": "1930 (Cyber Crime Helpline)"
+}
+
+class ScanInput(BaseModel):
+    text: Optional[str] = None
+    phone: Optional[str] = None
+    url: Optional[str] = None
+    medium: str = "unknown"
+
+@app.post("/scan")
+async def scan_threat(input: ScanInput) -> Dict[str, Any]:
+    results = {"detections": {}, "risk_level": "LOW"}
+    
+    # Text BERT + patterns
+    if input.text:
+        bert = classifier(input.text)[0]
+        is_spam = "SPAM" if "LABEL_1" in bert['label'] else "HAM"
+        
+        threats = []
+        if re.search(r'http[s]?://|bit\.ly', input.text): threats.append("PHISHING_URL")
+        if re.search(r'\b\d{4,6}\b.*OTP', input.text, re.I): threats.append("OTP_LEAK")
+        if re.search(r'bank|upi|paytm|account', input.text, re.I): threats.append("BANK_FRAUD")
+        
+        results["detections"]["text"] = {
+            "prediction": is_spam,
+            "confidence": round(float(bert['score']), 3),
+            "threats": threats
+        }
+    
+    # Phone check
+    if input.phone:
+        results["detections"]["phone"] = {
+            "is_fraud": bool(re.search(r'9[8-9]\d{8}', input.phone)),
+            "risk": "HIGH"
+        }
+    
+    # URL check
+    if input.url:
+        results["detections"]["url"] = {
+            "is_phishing": bool(re.search(r'bit\.ly|tinyurl|short\.url', input.url)),
+            "risk": "HIGH"
+        }
+    
+    # Calculate overall risk
+    total_threats = sum(len(d.get("threats", [])) for d in results["detections"].values())
+    results["risk_level"] = "HIGH" if total_threats > 0 or any("HIGH" in str(v) for v in results["detections"].values()) else "LOW"
+    results["medium"] = input.medium
+    results["stats"] = STATS
+    results["actions"] = ["Block immediately", "Never click links", "Report to 1930"]
+    
+    return results
 
 @app.get("/")
 async def root():
-    return {"message": "CyberGuard Nexus API - Ready for scam detection!"}
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "scam-detection"}
-
-class TextInput(BaseModel):
-    text: str
-
-@app.post("/detect/scam-text")
-async def detect_scam_text(input_data: TextInput):
-    text = input_data.text
-    # Simple keyword + length detector (ML later)
-    scam_keywords = ["OTP", "urgent", "bank account", "prize won", "click here"]
-    score = sum(1 for word in scam_keywords if word.lower() in text.lower())
-    length_score = min(len(text)/100, 1.0)  # Suspiciously long?
-    
-    risk = min((score + length_score) / 3, 1.0)
-    
-    return {
-        "text": text,
-        "risk_score": round(risk, 2),
-        "risk_level": "HIGH" if risk > 0.7 else "MEDIUM" if risk > 0.4 else "LOW",
-        "flags": [kw for kw in scam_keywords if kw.lower() in text.lower()]
-    }
+    return {"CyberGuard": "LIVE", "endpoint": "/scan", "docs": "/docs"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
